@@ -21,6 +21,9 @@ use std::{
 #[derive(Parser, Debug)]
 #[command(about = "Bounded CPU/GPU word-OCR pipeline with optional measured batch calibration")]
 struct Args {
+    /// Experimental bounded dense-text rescans before recognition.
+    #[arg(long)]
+    dense_refine: bool,
     #[arg(long, default_value = "testdata/throughput.json")]
     workload: PathBuf,
     #[arg(long, default_value = "models")]
@@ -92,7 +95,11 @@ fn signature(summary: &Value) -> Value {
     Value::Object(result)
 }
 fn child(a: &Args, config: &Config, output: &Path, pages: usize, seconds: f64) -> Result<bool> {
-    let status = Command::new(std::env::current_exe()?)
+    let mut command = Command::new(std::env::current_exe()?);
+    if config.dense_refine {
+        command.arg("--dense-refine");
+    }
+    let status = command
         .args([
             "--workload",
             a.workload.to_str().unwrap(),
@@ -193,10 +200,17 @@ fn main() -> Result<()> {
         .into_iter()
         .max()
         .unwrap();
-    let per_page = max_pixels * 9 + a.size * a.size * 16;
+    let per_page = max_pixels * (if a.dense_refine { 18 } else { 9 })
+        + a.size * a.size * 16
+        + if a.dense_refine {
+            2 * 1024 * 1024 * 16
+        } else {
+            0
+        };
     let automatic_inflight =
         (a.host_mib * 1048576 / per_page).clamp(1, if a.vram_4gb { 2 } else { 8 });
     let config = Config {
+        dense_refine: a.dense_refine,
         size: a.size,
         reco_batch: a.reco_batch,
         det_batch: a.det_batch,

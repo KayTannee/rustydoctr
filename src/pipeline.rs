@@ -3,7 +3,7 @@ use crate::{
     Metadata,
     crops::{self, Mapping},
     detection::{self, Word},
-    infer, preprocess, recognize,
+    infer, preprocess, recognize, refinement,
 };
 use anyhow::{Result, anyhow, ensure};
 use crossbeam_channel::{Receiver, RecvTimeoutError, SendTimeoutError, Sender, bounded};
@@ -28,6 +28,8 @@ use std::{
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
+    #[serde(default)]
+    pub dense_refine: bool,
     pub size: usize,
     pub reco_batch: usize,
     pub det_batch: usize,
@@ -102,12 +104,15 @@ struct Prepared {
     admitted: Instant,
     image: RgbImage,
     tensor: Vec<f32>,
+    tiles: Vec<(refinement::Tile, Vec<f32>)>,
 }
 struct Detected {
     prepared: Prepared,
     probability: Vec<f32>,
+    refined: Vec<(refinement::Tile, Vec<f32>)>,
 }
 struct Accumulator {
+    pub refinement_tiles: Vec<refinement::Tile>,
     id: String,
     sequence: usize,
     page: usize,
@@ -123,6 +128,7 @@ struct Chunk {
     references: Vec<Reference>,
 }
 struct Complete {
+    pub refinement_tiles: Vec<refinement::Tile>,
     id: String,
     sequence: usize,
     page: usize,
@@ -131,6 +137,7 @@ struct Complete {
 }
 #[derive(Serialize)]
 pub struct Record {
+    pub refinement_tiles: Vec<refinement::Tile>,
     pub id: String,
     pub sequence: usize,
     pub page: usize,
@@ -323,6 +330,32 @@ where
                         &meta.db_resnet34.mean,
                         &meta.db_resnet34.std,
                     );
+                    let tiles = if config.dense_refine {
+                        refinement::select(&image, config.size)
+                            .into_iter()
+                            .map(|tile| {
+                                let crop = image::imageops::crop_imm(
+                                    &image,
+                                    tile.x,
+                                    tile.y,
+                                    tile.width,
+                                    tile.height,
+                                )
+                                .to_image();
+                                let tensor = preprocess::prepare(
+                                    &crop,
+                                    refinement::SIZE,
+                                    refinement::SIZE,
+                                    true,
+                                    &meta.db_resnet34.mean,
+                                    &meta.db_resnet34.std,
+                                );
+                                (tile, tensor)
+                            })
+                            .collect()
+                    } else {
+                        vec![]
+                    };
                     add(&metrics.read, start);
                     send(
                         &prep_tx,
@@ -333,6 +366,7 @@ where
                             admitted,
                             image,
                             tensor,
+                            tiles,
                         },
                         abort,
                     )?;
@@ -376,16 +410,35 @@ where
                         "Unexpected detector shape"
                     );
                     add(&metrics.det, start);
-                    for (prepared, raw) in batch
+                    for (mut prepared, raw) in batch
                         .into_iter()
                         .zip(logits.chunks(config.size * config.size))
                     {
+                        let mut refined = Vec::new();
+                        for (tile, tensor) in std::mem::take(&mut prepared.tiles) {
+                            let start = Instant::now();
+                            let (shape, logits) = infer(
+                                &mut det,
+                                tensor,
+                                [1, 3, refinement::SIZE, refinement::SIZE],
+                            )?;
+                            ensure!(
+                                shape == [1, 1, refinement::SIZE as i64, refinement::SIZE as i64],
+                                "Unexpected refinement shape"
+                            );
+                            add(&metrics.det, start);
+                            refined.push((
+                                tile,
+                                logits.into_iter().map(|x| 1. / (1. + (-x).exp())).collect(),
+                            ));
+                        }
                         let probability = raw.iter().map(|x| 1. / (1. + (-x).exp())).collect();
                         send(
                             &det_tx,
                             Detected {
                                 prepared,
                                 probability,
+                                refined,
                             },
                             abort,
                         )?;
@@ -407,17 +460,39 @@ where
                     while let Some(item) = recv(&rx, abort)? {
                         let start = Instant::now();
                         let p = item.prepared;
-                        let words = detection::boxes(
+                        let mut words = detection::boxes(
                             &item.probability,
                             config.size,
                             config.size,
                             p.image.height() as usize,
                             p.image.width() as usize,
                         );
+                        let refinement_tiles = item
+                            .refined
+                            .iter()
+                            .map(|(t, _)| t.clone())
+                            .collect::<Vec<_>>();
+                        for (tile, probability) in item.refined {
+                            let extra = detection::boxes(
+                                &probability,
+                                refinement::SIZE,
+                                refinement::SIZE,
+                                tile.height as usize,
+                                tile.width as usize,
+                            );
+                            refinement::merge(
+                                &mut words,
+                                extra,
+                                &tile,
+                                p.image.width(),
+                                p.image.height(),
+                            );
+                        }
                         let (crops, maps) = crops::extract(&p.image, &words)?;
                         drop(p.image);
                         let count = crops.len();
                         let page = Arc::new(Mutex::new(Accumulator {
+                            refinement_tiles: refinement_tiles.clone(),
                             id: p.id.clone(),
                             sequence: p.sequence,
                             page: p.page,
@@ -432,6 +507,7 @@ where
                             send(
                                 &done,
                                 Complete {
+                                    refinement_tiles: refinement_tiles.clone(),
                                     id: p.id.clone(),
                                     sequence: p.sequence,
                                     page: p.page,
@@ -509,6 +585,7 @@ where
                             send(
                                 done,
                                 Complete {
+                                    refinement_tiles: p.refinement_tiles.clone(),
                                     id: p.id.clone(),
                                     sequence: p.sequence,
                                     page: p.page,
@@ -590,6 +667,7 @@ where
                     while let Some(page) = pending.remove(&count) {
                         words += page.words.len();
                         let record = Record {
+                            refinement_tiles: page.refinement_tiles,
                             id: page.id,
                             sequence: page.sequence,
                             page: page.page,

@@ -2,6 +2,18 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "OCR: generate quality sample pages (CPU only)",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv-baseline/Scripts/python.exe",
+      "args": [
+        "scripts/generate_document_fixtures.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "OCR: build Python wheel",
       "type": "process",
       "command": "powershell.exe",
@@ -170,6 +182,33 @@
         "instanceLimit": 1
       },
       "problemMatcher": []
+    },
+    {
+      "label": "OCR: benchmark native dense refinement",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv-baseline/Scripts/python.exe",
+      "args": [
+        "-u",
+        "scripts/benchmark_refinement.py",
+        "--pages",
+        "192"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": [],
+      "dependsOn": [
+        "Rust: build vertical slice",
+        "OCR: generate quality sample pages (CPU only)"
+      ],
+      "dependsOrder": "sequence",
+      "runOptions": {
+        "instanceLimit": 1
+      }
     }
   ],
   "inputs": [

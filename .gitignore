@@ -12,3 +12,5 @@ testdata/throughput.json
 results/
 dist/
 profiles/
+
+output/pdf/quality/

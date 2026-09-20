@@ -68,5 +68,22 @@ eventually blocks feeding. This bounds page counts, not bytes for arbitrarily hu
 pages. Keep one producer and one consumer. Heavy Python postprocessing may need a
 separate bounded process pool; the example's independent consumer writes JSONL.
 
-This slice does upright **word OCR**. Rotation correction, retry passes, line/block
+This slice does upright **word OCR**. Rotation correction, recognition retries, line/block
 assembly and table/layout analysis are not implemented yet.
+
+Experimental dense-text refinement is opt-in after rebuilding the wheel:
+
+```python
+import json
+config = json.load(open("profiles/my-machine/config.json"))
+config["dense_refine"] = True
+with Stream(models="models", config=config) as ocr:
+    ...  # use the same independent producer/consumer pattern above
+```
+
+This selects at most one band (at most 25% of page height), detects two overlapping
+1024 tiles, reconciles boxes, then recognizes once. Output `refinement_tiles`
+records source-pixel crop bounds and center-ownership intervals. No selection
+returns an empty list. Missing `dense_refine` defaults to false for old profiles.
+It adds CPU work, host buffers and detector passes; remeasure memory and throughput
+before enabling it on a small GPU. It does not correct page/local rotation.

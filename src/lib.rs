@@ -5,6 +5,7 @@ pub mod pipeline;
 pub mod preprocess;
 #[cfg(feature = "python")]
 mod python;
+pub mod refinement;
 use anyhow::{Result, ensure};
 use ort::{
     execution_providers::CUDAExecutionProvider,
