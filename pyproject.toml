@@ -1,0 +1,24 @@
+[project]
+name = "rustydoctr"
+version = "0.1.0"
+description = "Bounded Rust/CUDA word OCR with a Python streaming interface"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[tool.maturin]
+python-source = "python"
+module-name = "rustydoctr._native"
+features = ["python"]
+include = [
+  { path = "THIRD_PARTY.md", format = "wheel" },
+  { path = "licenses/doctr-LICENSE", format = "wheel" },
+]
+
+[project.optional-dependencies]
+runtime = ["onnxruntime-gpu==1.23.2"]
+examples = ["pymupdf>=1.28.2", "Pillow>=11"]

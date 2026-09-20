@@ -1,0 +1,25 @@
+[package]
+name = "rustydoctr"
+version = "0.1.0"
+edition = "2024"
+default-run = "rustydoctr"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[features]
+python = ["dep:pyo3", "pyo3/extension-module"]
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "load-dynamic", "cuda"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+crossbeam-channel = "0.5"
+libloading = "0.8"
+pyo3 = { version = "0.27", optional = true, features = ["abi3-py312"] }
+
+[profile.release]
+debug = 1

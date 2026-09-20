@@ -1,0 +1,14 @@
+.venv*/
+.cache/
+__pycache__/
+.pytest_cache/
+testdata/generated/
+testdata/rotation/
+pybaseline/results/
+*.pyc
+target/
+models/
+testdata/throughput.json
+results/
+dist/
+profiles/

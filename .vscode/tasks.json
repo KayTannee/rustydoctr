@@ -1,0 +1,208 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "OCR: build Python wheel",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/build_python.ps1"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "OCR: profile system and Python library",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv-baseline/Scripts/python.exe",
+      "args": [
+        "-u",
+        "scripts/profile_system.py",
+        "${input:memoryProfile}",
+        "--python-check",
+        "--seconds",
+        "${input:throughputSeconds}"
+      ],
+      "dependsOn": [
+        "Rust: build vertical slice",
+        "OCR: build Python wheel"
+      ],
+      "dependsOrder": "sequence",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Rust: 4 GB target throughput (GPU-Z)",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/watch_pipeline.ps1",
+        "-Vram4GB",
+        "-Seconds",
+        "${input:throughputSeconds}"
+      ],
+      "dependsOn": "Rust: build vertical slice",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Rust: bounded auto-tuned throughput (GPU-Z)",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/watch_pipeline.ps1",
+        "-Seconds",
+        "${input:throughputSeconds}"
+      ],
+      "dependsOn": "Rust: build vertical slice",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Rust: build vertical slice",
+      "type": "process",
+      "command": "${env:USERPROFILE}/.cargo/bin/cargo.exe",
+      "args": [
+        "build",
+        "--release",
+        "--locked"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "CARGO_HOME": "${workspaceFolder}/.cache/cargo"
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Rust: upright throughput (GPU-Z)",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/watch_rust.ps1",
+        "-Seconds",
+        "${input:throughputSeconds}"
+      ],
+      "dependsOn": "Rust: build vertical slice",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "docTR: streaming throughput (GPU-Z)",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv-baseline/Scripts/python.exe",
+      "args": [
+        "-u",
+        "-m",
+        "pybaseline.run_throughput",
+        "--page",
+        "${input:throughputPage}",
+        "--seconds",
+        "${input:throughputSeconds}"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "throughputPage",
+      "type": "pickString",
+      "description": "Page to repeat through the full OCR pipeline",
+      "options": [
+        "upright_characters",
+        "skew7_characters",
+        "skew7_mixed_characters"
+      ],
+      "default": "upright_characters"
+    },
+    {
+      "id": "throughputSeconds",
+      "type": "pickString",
+      "description": "Feeding duration (plus model warmup and queue drain)",
+      "options": [
+        "300",
+        "600"
+      ],
+      "default": "300"
+    },
+    {
+      "id": "memoryProfile",
+      "type": "pickString",
+      "description": "GPU memory target for calibration",
+      "options": [
+        "--auto",
+        "--vram-4gb"
+      ],
+      "default": "--auto"
+    }
+  ]
+}
