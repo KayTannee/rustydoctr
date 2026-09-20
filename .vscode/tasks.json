@@ -209,6 +209,44 @@
       "runOptions": {
         "instanceLimit": 1
       }
+    },
+    {
+      "label": "OCR: export page orientation model (CPU only)",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv-baseline/Scripts/python.exe",
+      "args": [
+        "scripts/export_orientation_model.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "OCR: test native page orientation",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv-baseline/Scripts/python.exe",
+      "args": [
+        "-u",
+        "scripts/check_page_orientation.py"
+      ],
+      "dependsOn": [
+        "Rust: build vertical slice",
+        "OCR: export page orientation model (CPU only)",
+        "OCR: generate quality sample pages (CPU only)"
+      ],
+      "dependsOrder": "sequence",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      },
+      "problemMatcher": []
     }
   ],
   "inputs": [

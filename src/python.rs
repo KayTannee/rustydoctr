@@ -58,6 +58,9 @@ impl RawStream {
     #[new]
     fn new(py: Python<'_>, models: PathBuf, config_json: &str) -> PyResult<Self> {
         let config: Config = serde_json::from_str(config_json).map_err(pyerr)?;
+        if config.deskew && !config.page_orientation {
+            return Err(PyValueError::new_err("deskew requires page_orientation"));
+        }
         if config.inflight == 0
             || config.workers == 0
             || config.det_batch == 0
@@ -91,7 +94,7 @@ impl RawStream {
             } else {
                 None
             };
-            let (det, reco) = pipeline::sessions(&models, &config).map_err(pyerr)?;
+            let sessions = pipeline::sessions(&models, &config).map_err(pyerr)?;
             if let Some(base) = baseline {
                 let used = crate::gpu::Nvml::new()
                     .and_then(|n| n.memory())
@@ -140,8 +143,7 @@ impl RawStream {
                     pipeline::run_stream(
                         &config,
                         &meta,
-                        det,
-                        reco,
+                        sessions,
                         RunIo {
                             source,
                             sink,
@@ -163,7 +165,7 @@ impl RawStream {
                     cancel.store(true, Ordering::Relaxed);
                 }
                 *result.lock().unwrap() = Some(match &run {
-                    Ok((stats, _, _)) => serde_json::to_string(stats).map_err(|e| e.to_string()),
+                    Ok((stats, _)) => serde_json::to_string(stats).map_err(|e| e.to_string()),
                     Err(e) => Err(format!("{e:#}")),
                 });
                 drop(keepalive);

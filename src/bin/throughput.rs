@@ -21,6 +21,12 @@ use std::{
 #[derive(Parser, Debug)]
 #[command(about = "Bounded CPU/GPU word-OCR pipeline with optional measured batch calibration")]
 struct Args {
+    /// Correct coarse page direction on CPU before detection.
+    #[arg(long)]
+    page_orientation: bool,
+    /// Conservative floating-point fine skew (requires --page-orientation).
+    #[arg(long, requires = "page_orientation")]
+    deskew: bool,
     /// Experimental bounded dense-text rescans before recognition.
     #[arg(long)]
     dense_refine: bool,
@@ -96,6 +102,12 @@ fn signature(summary: &Value) -> Value {
 }
 fn child(a: &Args, config: &Config, output: &Path, pages: usize, seconds: f64) -> Result<bool> {
     let mut command = Command::new(std::env::current_exe()?);
+    if config.page_orientation {
+        command.arg("--page-orientation");
+    }
+    if config.deskew {
+        command.arg("--deskew");
+    }
     if config.dense_refine {
         command.arg("--dense-refine");
     }
@@ -207,9 +219,17 @@ fn main() -> Result<()> {
         } else {
             0
         };
+    let per_page = per_page
+        + if a.page_orientation {
+            max_pixels * 6
+        } else {
+            0
+        };
     let automatic_inflight =
         (a.host_mib * 1048576 / per_page).clamp(1, if a.vram_4gb { 2 } else { 8 });
     let config = Config {
+        page_orientation: a.page_orientation,
+        deskew: a.deskew,
         dense_refine: a.dense_refine,
         size: a.size,
         reco_batch: a.reco_batch,
@@ -352,31 +372,23 @@ fn main() -> Result<()> {
     });
     let work = (|| -> Result<Value> {
         let loading = Instant::now();
-        let (det, reco) = pipeline::sessions(&a.models, &config)?;
+        let sessions = pipeline::sessions(&a.models, &config)?;
         let model_load_seconds = loading.elapsed().as_secs_f64();
         let mut warm = config.clone();
         warm.pages = workload.pages.len();
         warm.seconds = 0.;
-        let (warmup, det, reco) = pipeline::run(
-            &warm,
-            &workload.pages,
-            &meta,
-            det,
-            reco,
-            None,
-            Some(&cancel),
-        )?;
+        let (warmup, sessions) =
+            pipeline::run(&warm, &workload.pages, &meta, sessions, None, Some(&cancel))?;
         println!(
             "Warmup complete ({:.1}s); starting measurement",
             warmup.wall_seconds
         );
         let start_ns = now();
-        let (stats, _det, _reco) = pipeline::run(
+        let (stats, _sessions) = pipeline::run(
             &config,
             &workload.pages,
             &meta,
-            det,
-            reco,
+            sessions,
             Some(a.output.join("pages.jsonl")),
             Some(&cancel),
         )?;
@@ -390,7 +402,7 @@ fn main() -> Result<()> {
         r["warmup_seconds"] = json!(warmup.wall_seconds);
         r["model"] = json!("db_resnet34 + parseq");
         r["scope"] = json!(
-            "Warm-cache decode, bounded interleaved upright OCR with cross-page crop batches, ordered JSONL flush/fsync. Load/warmup excluded. No orientation or document layout."
+            "Warm-cache decode, bounded interleaved word OCR with cross-page crop batches, ordered JSONL flush/fsync. Load/warmup excluded. Optional CPU page orientation, deskew and dense refinement are recorded in config. No local orientation or document layout."
         );
         Ok(r)
     })();

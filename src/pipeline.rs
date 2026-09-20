@@ -3,7 +3,7 @@ use crate::{
     Metadata,
     crops::{self, Mapping},
     detection::{self, Word},
-    infer, preprocess, recognize, refinement,
+    infer, orientation, preprocess, recognize, refinement,
 };
 use anyhow::{Result, anyhow, ensure};
 use crossbeam_channel::{Receiver, RecvTimeoutError, SendTimeoutError, Sender, bounded};
@@ -29,6 +29,10 @@ use std::{
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
+    pub page_orientation: bool,
+    #[serde(default)]
+    pub deskew: bool,
+    #[serde(default)]
     pub dense_refine: bool,
     pub size: usize,
     pub reco_batch: usize,
@@ -53,6 +57,7 @@ pub struct Workload {
 #[derive(Default)]
 struct Metrics {
     read: AtomicU64,
+    orientation: AtomicU64,
     admission_wait: AtomicU64,
     det: AtomicU64,
     det_wait: AtomicU64,
@@ -98,6 +103,7 @@ fn checked<T: Send>(abort: &AtomicBool, f: impl FnOnce() -> Result<T>) -> Result
     r
 }
 struct Prepared {
+    geometry: Option<orientation::Geometry>,
     id: String,
     sequence: usize,
     page: usize,
@@ -112,6 +118,7 @@ struct Detected {
     refined: Vec<(refinement::Tile, Vec<f32>)>,
 }
 struct Accumulator {
+    geometry: Option<orientation::Geometry>,
     pub refinement_tiles: Vec<refinement::Tile>,
     id: String,
     sequence: usize,
@@ -128,6 +135,7 @@ struct Chunk {
     references: Vec<Reference>,
 }
 struct Complete {
+    geometry: Option<orientation::Geometry>,
     pub refinement_tiles: Vec<refinement::Tile>,
     id: String,
     sequence: usize,
@@ -137,6 +145,8 @@ struct Complete {
 }
 #[derive(Serialize)]
 pub struct Record {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub geometry: Option<orientation::Geometry>,
     pub refinement_tiles: Vec<refinement::Tile>,
     pub id: String,
     pub sequence: usize,
@@ -156,7 +166,12 @@ pub struct Stats {
     pub stage_seconds: BTreeMap<String, f64>,
 }
 
-pub fn sessions(models: &std::path::Path, config: &Config) -> Result<(Session, Session)> {
+pub struct Sessions {
+    det: Session,
+    reco: Session,
+    orientation: Option<orientation::PageOrientation>,
+}
+pub fn sessions(models: &std::path::Path, config: &Config) -> Result<Sessions> {
     fn make(path: PathBuf, limit: usize) -> Result<Session> {
         Ok(Session::builder()?
             .with_intra_threads(1)?
@@ -175,21 +190,25 @@ pub fn sessions(models: &std::path::Path, config: &Config) -> Result<(Session, S
     );
     let det_bytes = config.det_arena_mib * 1024 * 1024;
     let reco_bytes = (config.arena_mib - config.det_arena_mib) * 1024 * 1024;
-    Ok((
-        make(models.join("db_resnet34.onnx"), det_bytes)?,
-        make(models.join("parseq.onnx"), reco_bytes)?,
-    ))
+    Ok(Sessions {
+        det: make(models.join("db_resnet34.onnx"), det_bytes)?,
+        reco: make(models.join("parseq.onnx"), reco_bytes)?,
+        orientation: if config.page_orientation {
+            Some(orientation::PageOrientation::load(models)?)
+        } else {
+            None
+        },
+    })
 }
 
 pub fn run(
     config: &Config,
     inputs: &[InputPage],
     meta: &Metadata,
-    det: Session,
-    reco: Session,
+    sessions: Sessions,
     output: Option<PathBuf>,
     cancel: Option<&AtomicBool>,
-) -> Result<(Stats, Session, Session)> {
+) -> Result<(Stats, Sessions)> {
     ensure!(!inputs.is_empty(), "Empty workload");
     let began = Instant::now();
     let mut sequence = 0;
@@ -215,8 +234,7 @@ pub fn run(
     run_stream(
         config,
         meta,
-        det,
-        reco,
+        sessions,
         RunIo {
             source,
             sink: FileSink(file),
@@ -269,15 +287,19 @@ pub struct RunIo<F, S> {
 pub fn run_stream<F, S>(
     config: &Config,
     meta: &Metadata,
-    mut det: Session,
-    mut reco: Session,
+    sessions: Sessions,
     io: RunIo<F, S>,
     cancel: Option<&AtomicBool>,
-) -> Result<(Stats, Session, Session)>
+) -> Result<(Stats, Sessions)>
 where
     F: FnMut() -> Result<Option<Frame>> + Send,
     S: Sink,
 {
+    let Sessions {
+        mut det,
+        mut reco,
+        mut orientation,
+    } = sessions;
     let RunIo {
         mut source,
         mut sink,
@@ -287,6 +309,10 @@ where
     ensure!(
         config.inflight > 0 && config.workers > 0 && config.det_batch > 0 && config.reco_batch > 0,
         "Empty workload/invalid pipeline capacity"
+    );
+    ensure!(
+        !config.deskew || config.page_orientation,
+        "Deskew requires page orientation"
     );
     let local_abort = AtomicBool::new(false);
     let abort = cancel.unwrap_or(&local_abort);
@@ -300,7 +326,7 @@ where
     for _ in 0..config.inflight {
         credit_tx.send(())?;
     }
-    thread::scope(|scope| -> Result<(Stats, Session, Session)> {
+    thread::scope(|scope| -> Result<(Stats, Sessions)> {
         let reader = scope.spawn(|| {
             checked(abort, || {
                 let mut sequence = 0;
@@ -322,6 +348,16 @@ where
                         PageImage::File(path) => image::open(path)?.to_rgb8(),
                         PageImage::Rgb(image) => image,
                     };
+                    add(&metrics.read, start);
+                    let start = Instant::now();
+                    let (image, geometry) = if let Some(model) = &mut orientation {
+                        let (image, geometry) = model.correct(image, config.deskew)?;
+                        (image, Some(geometry))
+                    } else {
+                        (image, None)
+                    };
+                    add(&metrics.orientation, start);
+                    let start = Instant::now();
                     let tensor = preprocess::prepare(
                         &image,
                         config.size,
@@ -360,6 +396,7 @@ where
                     send(
                         &prep_tx,
                         Prepared {
+                            geometry,
                             id: frame.id,
                             sequence,
                             page,
@@ -374,7 +411,7 @@ where
                 }
                 drop(prep_tx);
                 drop(credit_rx);
-                Ok(())
+                Ok(orientation)
             })
         });
         let detector = scope.spawn(|| {
@@ -492,6 +529,7 @@ where
                         drop(p.image);
                         let count = crops.len();
                         let page = Arc::new(Mutex::new(Accumulator {
+                            geometry: p.geometry.clone(),
                             refinement_tiles: refinement_tiles.clone(),
                             id: p.id.clone(),
                             sequence: p.sequence,
@@ -507,6 +545,7 @@ where
                             send(
                                 &done,
                                 Complete {
+                                    geometry: p.geometry.clone(),
                                     refinement_tiles: refinement_tiles.clone(),
                                     id: p.id.clone(),
                                     sequence: p.sequence,
@@ -585,6 +624,7 @@ where
                             send(
                                 done,
                                 Complete {
+                                    geometry: p.geometry.clone(),
                                     refinement_tiles: p.refinement_tiles.clone(),
                                     id: p.id.clone(),
                                     sequence: p.sequence,
@@ -666,12 +706,17 @@ where
                     );
                     while let Some(page) = pending.remove(&count) {
                         words += page.words.len();
+                        let mut words = page.words;
+                        if let Some(geometry) = &page.geometry {
+                            geometry.map_words(&mut words);
+                        }
                         let record = Record {
+                            geometry: page.geometry,
                             refinement_tiles: page.refinement_tiles,
                             id: page.id,
                             sequence: page.sequence,
                             page: page.page,
-                            words: page.words,
+                            words,
                         };
                         sink.write(&record)?;
                         let latency = page.admitted.elapsed().as_secs_f64();
@@ -716,6 +761,7 @@ where
                 }
                 let stage_seconds = [
                     ("decode_prepare", &metrics.read),
+                    ("page_orientation", &metrics.orientation),
                     ("admission_wait", &metrics.admission_wait),
                     ("detection", &metrics.det),
                     ("detector_input_wait", &metrics.det_wait),
@@ -773,10 +819,17 @@ where
                 }
             }
         }
-        r?;
+        let orientation = r?;
         if let Some(e) = post_error {
             return Err(e);
         }
-        Ok((written?, d?, rec?))
+        Ok((
+            written?,
+            Sessions {
+                det: d?,
+                reco: rec?,
+                orientation,
+            },
+        ))
     })
 }

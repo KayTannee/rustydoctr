@@ -133,6 +133,7 @@ mod tests {
     fn splitting_covers_end() {
         let img = RgbImage::new(105, 10);
         let w = Word {
+            quadrilateral: None,
             polygon: [[0., 0.], [1., 1.]],
             objectness: 1.,
             text: String::new(),

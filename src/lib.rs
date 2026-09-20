@@ -1,6 +1,7 @@
 pub mod crops;
 pub mod detection;
 pub mod gpu;
+pub mod orientation;
 pub mod pipeline;
 pub mod preprocess;
 #[cfg(feature = "python")]

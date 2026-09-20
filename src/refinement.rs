@@ -155,6 +155,7 @@ mod tests {
     use super::*;
     fn word(x: f32, y: f32) -> Word {
         Word {
+            quadrilateral: None,
             polygon: [[x - 0.01, y - 0.01], [x + 0.01, y + 0.01]],
             objectness: 1.,
             text: String::new(),

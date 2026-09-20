@@ -6,6 +6,8 @@ use std::collections::VecDeque;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Word {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quadrilateral: Option<[[f32; 2]; 4]>,
     pub polygon: [[f32; 2]; 2],
     pub objectness: f32,
     pub text: String,
@@ -120,6 +122,7 @@ pub fn boxes(prob: &[f32], h: usize, w: usize, ih: usize, iw: usize) -> Vec<Word
         }
         if b[2] > b[0] && b[3] > b[1] {
             result.push(Word {
+                quadrilateral: None,
                 polygon: [[b[0], b[1]], [b[2], b[3]]],
                 objectness: score,
                 text: String::new(),

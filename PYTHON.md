@@ -68,7 +68,8 @@ eventually blocks feeding. This bounds page counts, not bytes for arbitrarily hu
 pages. Keep one producer and one consumer. Heavy Python postprocessing may need a
 separate bounded process pool; the example's independent consumer writes JSONL.
 
-This slice does upright **word OCR**. Rotation correction, recognition retries, line/block
+This slice does **word OCR**, with optional [page orientation and fractional
+deskew](PAGE_ORIENTATION.md). Local text rotation, recognition retries, line/block
 assembly and table/layout analysis are not implemented yet.
 
 Experimental dense-text refinement is opt-in after rebuilding the wheel:

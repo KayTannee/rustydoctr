@@ -6,6 +6,8 @@ uv pip install --python .venv-baseline/Scripts/python.exe --cache-dir .cache/uv 
 if ($LASTEXITCODE) { throw 'ONNX dependencies failed' }
 & .venv-baseline/Scripts/python.exe scripts/export_rust_models.py
 if ($LASTEXITCODE) { throw 'Model export failed' }
+& .venv-baseline/Scripts/python.exe scripts/export_orientation_model.py
+if ($LASTEXITCODE) { throw 'Page orientation model export failed' }
 $cargoCommand = Get-Command cargo -ErrorAction SilentlyContinue
 $cargo = if ($cargoCommand) { $cargoCommand.Source } else { Join-Path $env:USERPROFILE '.cargo/bin/cargo.exe' }
 $env:CARGO_HOME = Join-Path $repo '.cache/cargo'
