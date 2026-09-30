@@ -28,8 +28,8 @@ occasionally improved box matching while damaging recognition. The challenger
 also varied substantially by font. No default change or throughput claim follows
 from these short accuracy runs.
 
-Local results: [HTML report](pybaseline/results/dense_tuning_v2/report.html),
-[machine-readable recommendation](pybaseline/results/dense_tuning_v2/recommendation.json).
+Local results: [HTML report](../../pybaseline/results/dense_tuning_v2/report.html),
+[machine-readable recommendation](../../pybaseline/results/dense_tuning_v2/recommendation.json).
 
 ## Reproduce
 

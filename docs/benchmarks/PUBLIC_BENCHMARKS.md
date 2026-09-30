@@ -86,7 +86,7 @@ files; completed inference/scoring runs are skipped. For changed OCR code or
 settings, pass a new `--output` to the benchmark and matching `--root` to the
 scorer/report scripts rather than reusing old scores.
 
-[Report](pybaseline/results/public_v1/report.html) and raw JSONL/JSON results live
+[Report](../../pybaseline/results/public_v1/report.html) and raw JSONL/JSON results live
 under `pybaseline/results/public_v1`. Six modes: stock Python and plain Rust at
 1024 and 1536, stock Python rotation/straightening at 1536, and Rust enhanced at
 1536. No additional table/layout models run. Published recognition-only figures

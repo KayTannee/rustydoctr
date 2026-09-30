@@ -17,7 +17,7 @@ cache as in `scripts/setup_rust.ps1`). Add `--dense-refine` to the existing comm
 ```
 
 For Python, rebuild with `./scripts/build_python.ps1`, then set
-`config["dense_refine"] = True` before constructing `Stream`. See [PYTHON.md](PYTHON.md).
+`config["dense_refine"] = True` before constructing `Stream`. See [PYTHON.md](../guides/PYTHON.md).
 
 Generate the quality fixtures first, then run VS Code task
 **OCR: benchmark native dense refinement**, or:

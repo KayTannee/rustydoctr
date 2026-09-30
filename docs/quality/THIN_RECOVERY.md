@@ -55,7 +55,7 @@ stable. This remains a 6 GiB-arena desktop run, not a 4GB-device result.
 installed-wheel producer/consumer check passed. Nine of the 39 additions also
 pass exact text + strict IoU 0.5; most narrow glyphs still have loose boxes.
 
-[Current native report](pybaseline/results/native_anchor_v1/report.html).
+[Current native report](../../pybaseline/results/native_anchor_v1/report.html).
 CPU parity: `python scripts/check_anchor_recovery.py` (saved caches and preserved
 v1 probe required). Native comparisons use `scripts/benchmark_anchor_recovery.py`;
 see [remaining-omissions notes](REMAINING_OMISSIONS.md).
@@ -80,7 +80,7 @@ detections; some are misread or have loose boxes. It establishes neither a digit
 recovery gain nor broad false-positive safety. The three additions were all on
 the skewed Arial page; none covered the negative-control marks.
 
-[Visual report and added crops](output/diagnostics/thin-recovery/index.html).
+[Visual report and added crops](../../output/diagnostics/thin-recovery/index.html).
 Raw results: `pybaseline/results/thin_recovery_v3/results.json` and
 `pybaseline/results/thin_fresh_v1/recovery/results.json`.
 
@@ -125,8 +125,8 @@ All 1,360 measured pages drained in order with stable repeated text and f32
 coordinates. Each enabled run added the same 180 recovered words (nine ×20).
 These repetitions demonstrate stability, not additional independent accuracy cases.
 
-[Native benchmark report](pybaseline/results/native_thin_v1/report.html) ·
-[Repeated-output checks](pybaseline/results/native_thin_v1/repeat_checks.json).
+[Native benchmark report](../../pybaseline/results/native_thin_v1/report.html) ·
+[Repeated-output checks](../../pybaseline/results/native_thin_v1/repeat_checks.json).
 
 ## Reproduce
 

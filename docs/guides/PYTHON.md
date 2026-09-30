@@ -38,7 +38,7 @@ For another deployment, set `ORT_DYLIB_PATH` and, on Windows,
 ./.venv-baseline/Scripts/python examples/stream_pdf.py testdata/generated/ocr_stress.pdf --config profiles/my-machine/config.json --output results.jsonl
 ```
 
-The complete example is [examples/stream_pdf.py](examples/stream_pdf.py). Its core:
+The complete example is [examples/stream_pdf.py](../../examples/stream_pdf.py). Its core:
 
 ```python
 from threading import Thread
@@ -88,7 +88,7 @@ pages. Keep one producer and one consumer. Heavy Python postprocessing may need 
 separate bounded process pool; the example's independent consumer writes JSONL.
 
 This slice does **word OCR**, with optional [page orientation and fractional
-deskew](PAGE_ORIENTATION.md). Experimental [line-guided crop alternatives](LINE_ORIENTATION.md)
+deskew](../quality/PAGE_ORIENTATION.md). Experimental [line-guided crop alternatives](../quality/LINE_ORIENTATION.md)
 are available with `config["line_guided_orientation"] = True`; they retain per-word
 `crop_decision` diagnostics and default to off. General mixed local rotation,
 line/block assembly and table/layout analysis remain incomplete.
@@ -109,17 +109,17 @@ records source-pixel crop bounds and center-ownership intervals. No selection
 returns an empty list. Missing `dense_refine` defaults to false for old profiles.
 
 Optional tile-only detector settings live in `config["dense_detection"]`.
-See [the tuning results and configuration example](DENSE_TUNING.md); defaults
+See [the tuning results and configuration example](../quality/DENSE_TUNING.md); defaults
 remain unchanged and full-page detection is unaffected.
 
 Set `config["thin_recovery"] = True` to opt into bounded recovery of thin words
 discarded by detector cleanup. It reuses the same streaming queues and models.
 Accepted words carry a `thin_recovery` evidence object; the flag defaults to false.
-See [native recovery controls and results](THIN_RECOVERY.md).
+See [native recovery controls and results](../quality/THIN_RECOVERY.md).
 Dense refinement adds detector passes; thin recovery alone reuses existing maps.
 These options add CPU work and host buffers; remeasure memory and throughput
 before enabling it on a small GPU. It does not correct page/local rotation.
 
 Thin recovery now includes one-hop line support for otherwise omitted narrow
 characters. Dense refinement also reconciles seam ownership. Both share the
-existing streaming queues and page admission limit; see [THIN_RECOVERY.md](THIN_RECOVERY.md).
+existing streaming queues and page admission limit; see [THIN_RECOVERY.md](../quality/THIN_RECOVERY.md).

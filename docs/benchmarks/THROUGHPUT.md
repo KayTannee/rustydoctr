@@ -1,7 +1,7 @@
 # Bounded word-OCR throughput experiment
 
-For the short setup/profile workflow, see [BENCHMARK.md](BENCHMARK.md).
-For the installable wheel and producer/consumer example, see [PYTHON.md](PYTHON.md).
+For the short setup/profile workflow, see [BENCHMARK.md](../guides/BENCHMARK.md).
+For the installable wheel and producer/consumer example, see [PYTHON.md](../guides/PYTHON.md).
 
 Use **Terminal → Run Task → Rust: bounded auto-tuned throughput (GPU-Z)**.
 Choose 300 or 600 seconds. Startup calibration and model warmup are additional

@@ -21,8 +21,8 @@ component stage across eligible full-page and tile maps. Pixel-window evidence
 can include partial components, so these are pipeline diagnostics, not claims
 about the model's internal reasoning.
 
-[All 60 highlighted with stage evidence](pybaseline/results/remaining_60_v1/report.html)
-and [PNG contact sheet](pybaseline/results/remaining_60_v1/contact-sheet.png).
+[All 60 highlighted with stage evidence](../../pybaseline/results/remaining_60_v1/report.html)
+and [PNG contact sheet](../../pybaseline/results/remaining_60_v1/contact-sheet.png).
 
 ## One targeted experiment
 
@@ -57,7 +57,7 @@ million source pixels per page. Existing native recovery is also present in the
 baseline. Combined old/new proposals peaked at ten per original page and six
 per fresh page; a native port should share the existing overall recovery budget.
 
-[Before/after table and every accepted crop](output/diagnostics/anchor-chain/index.html).
+[Before/after table and every accepted crop](../../output/diagnostics/anchor-chain/index.html).
 
 ## Confirmed tile-boundary defect
 
@@ -117,4 +117,4 @@ and a full-workload warmup, retains a three-page admission limit, and records
 binary hashes and device/idle-relative VRAM. Existing output resumes completed
 runs; use a new folder for a new implementation. This is not a 4GB-budget test.
 
-[Native report and added-word crops](pybaseline/results/native_anchor_v1/report.html).
+[Native report and added-word crops](../../pybaseline/results/native_anchor_v1/report.html).

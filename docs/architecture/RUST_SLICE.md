@@ -1,7 +1,7 @@
 # Rust word-OCR vertical slice
 
 For the newer bounded, overlapping CPU/GPU pipeline and sustained comparison,
-see [THROUGHPUT.md](THROUGHPUT.md). This document describes the original sequential
+see [THROUGHPUT.md](../benchmarks/THROUGHPUT.md). This document describes the original sequential
 slice and its older task/results.
 
 The native executable in `src/` loads DB ResNet34 and PARSeq exported from the same

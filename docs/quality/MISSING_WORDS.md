@@ -10,7 +10,7 @@ Run the CPU-only saved-output audit:
 .venv-baseline/Scripts/python.exe scripts/audit_missing_words.py
 ```
 
-Open [the visual report](output/diagnostics/missing-words/index.html). Inputs are
+Open [the visual report](../../output/diagnostics/missing-words/index.html). Inputs are
 the saved line-orientation comparison and dense-tuning-v2 results. No new GPU
 inference is needed. Explicit known stress sequences are separated using fixture
 text, never inferred from OCR errors. Ordinary sentences preceding those

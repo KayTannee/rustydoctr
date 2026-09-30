@@ -15,7 +15,7 @@ python-source = "python"
 module-name = "rustydoctr._native"
 features = ["python"]
 include = [
-  { path = "THIRD_PARTY.md", format = "wheel" },
+  { path = "docs/legal/THIRD_PARTY.md", format = "wheel" },
   { path = "licenses/doctr-LICENSE", format = "wheel" },
 ]
 

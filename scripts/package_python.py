@@ -22,7 +22,7 @@ def build(staging):
     (out/'configs').mkdir(exist_ok=True)
     for profile in ['balanced','low-vram']:(out/'configs'/f'{profile}.json').write_text(json.dumps(module.default_config(profile),indent=2),encoding='utf-8')
     for name in ['stream_images.py','stream_pdf.py']:copy('examples/'+name,'examples/'+name)
-    copy('PYTHON_DEPLOYMENT.md','README.md');copy('THIRD_PARTY.md','THIRD_PARTY.md');copy('licenses/doctr-LICENSE','licenses/doctr-LICENSE')
+    copy('docs/guides/PYTHON_DEPLOYMENT.md','README.md');copy('docs/legal/THIRD_PARTY.md','THIRD_PARTY.md');copy('licenses/doctr-LICENSE','licenses/doctr-LICENSE')
     copy('scripts/install_transfer.ps1','install.ps1');copy('scripts/verify_transfer.py','verify_bundle.py')
     copy('pybaseline/requirements-deploy-lock.txt','runtime-lock.txt')
     copy('testdata/generated/a4_control.png','samples/document.png')

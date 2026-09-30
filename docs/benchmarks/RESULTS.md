@@ -29,8 +29,8 @@ docTR; these measurements do not isolate the GIL or the language alone.
 
 Open `pybaseline/results/throughput/report.html` for the complete audit, accuracy,
 GPU/VRAM traces and original runs. The current local parameters are
-`profiles/desktop-verified/config.json`. Follow [BENCHMARK.md](BENCHMARK.md) to
-generate a new profile, and [PYTHON.md](PYTHON.md) to use it.
+`profiles/desktop-verified/config.json`. Follow [BENCHMARK.md](../guides/BENCHMARK.md) to
+generate a new profile, and [PYTHON.md](../guides/PYTHON.md) to use it.
 
 This is upright word OCR. PDF rasterization is demonstrated separately, and
 orientation/retries/layout are deferred. Dense A3 remains an accuracy stress case.

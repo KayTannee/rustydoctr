@@ -43,4 +43,4 @@ not an exhaustive optimum. The 4 GB mode keeps both FP32 models resident, accoun
 for currently free VRAM, and uses smaller batches; it does not quantize or lower
 detector resolution. Sampled device-memory guards can miss brief peaks.
 
-For baseline docTR commands and detailed findings, see [THROUGHPUT.md](THROUGHPUT.md).
+For baseline docTR commands and detailed findings, see [THROUGHPUT.md](../benchmarks/THROUGHPUT.md).
