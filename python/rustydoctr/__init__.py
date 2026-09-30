@@ -5,7 +5,24 @@ import json
 import os
 from pathlib import Path
 
+__version__ = "0.2.0"
 _dll_handles = []
+
+
+def default_config(profile="balanced"):
+    """Return a fresh conservative starting config, not a measured machine profile."""
+    config = dict(size=1024, reco_batch=128, det_batch=1, workers=2, inflight=2,
+                  arena_mib=6144, det_arena_mib=4096, vram_limit_mib=0,
+                  seconds=0, pages=0, page_orientation=False, deskew=False,
+                  dense_refine=False, thin_recovery=False, line_guided_orientation=False,
+                  dense_detection=dict(bin_thresh=0.3, box_thresh=0.1, unclip_ratio=1.5))
+    if profile == "low-vram":
+        config.update(reco_batch=64, inflight=1, arena_mib=3072, det_arena_mib=2048,
+                      vram_limit_mib=3584)
+    elif profile != "balanced":
+        raise ValueError("profile must be 'balanced' or 'low-vram'")
+    return config
+
 
 
 @cache
@@ -23,11 +40,25 @@ def _runtime():
     if spec and spec.submodule_search_locations:
         paths.append(Path(next(iter(spec.submodule_search_locations))) / "lib")
     paths.extend(Path(p) for p in os.environ.get("RUSTYDOCTR_DLL_DIRS", "").split(os.pathsep) if p)
+    # cuDNN loads additional engine DLLs lazily, beyond ORT's primary preloads.
+    spec = importlib.util.find_spec("nvidia")
+    if spec and spec.submodule_search_locations:
+        for root in spec.submodule_search_locations:
+            paths.extend(sorted(Path(root).glob("*/bin")))
     if os.name == "nt":
         for path in paths:
             if path.is_dir():
                 _dll_handles.append(os.add_dll_directory(str(path)))
                 os.environ["PATH"] = str(path) + os.pathsep + os.environ["PATH"]
+    try:
+        import onnxruntime as ort
+    except ImportError as exc:
+        raise RuntimeError('Install the GPU runtime: pip install "rustydoctr[gpu]"') from exc
+    # Load pip-installed NVIDIA runtimes (or an existing compatible Torch runtime).
+    # No Torch import or Python inference session is required.
+    if os.name == "nt":
+        ort.preload_dlls()
+
 
 
 class Stream:
@@ -40,10 +71,22 @@ class Stream:
 
     def __init__(self, models="models", config=None):
         if config is None:
-            raise ValueError("Pass a measured config.json or a configuration dict")
+            config = default_config()
         if isinstance(config, (str, os.PathLike)):
             config = json.loads(Path(config).read_text(encoding="utf-8"))
-        self.config = dict(config)
+        supplied = dict(config)
+        self.config = default_config()
+        unknown = supplied.keys() - self.config.keys()
+        if unknown:
+            raise ValueError(f"Unknown configuration fields: {sorted(unknown)}")
+        self.config.update(supplied)
+        models = Path(models).resolve()
+        required = ["metadata.json", "db_resnet34.onnx", "parseq.onnx"]
+        if self.config["page_orientation"]:
+            required += ["page_orientation.json", "page_orientation.onnx"]
+        missing = [name for name in required if not (models / name).is_file()]
+        if missing:
+            raise FileNotFoundError(f"Missing model files in {models}: {', '.join(missing)}")
         _runtime()
         from ._native import RawStream
         self._raw = RawStream(str(Path(models).resolve()), json.dumps(self.config))

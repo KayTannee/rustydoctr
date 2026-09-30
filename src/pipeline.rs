@@ -29,6 +29,12 @@ use std::{
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
+    pub thin_recovery: bool,
+    #[serde(default)]
+    pub dense_detection: detection::Params,
+    #[serde(default)]
+    pub line_guided_orientation: bool,
+    #[serde(default)]
     pub page_orientation: bool,
     #[serde(default)]
     pub deskew: bool,
@@ -172,6 +178,10 @@ pub struct Sessions {
     orientation: Option<orientation::PageOrientation>,
 }
 pub fn sessions(models: &std::path::Path, config: &Config) -> Result<Sessions> {
+    ensure!(
+        config.dense_detection.valid(),
+        "Invalid dense detector parameters"
+    );
     fn make(path: PathBuf, limit: usize) -> Result<Session> {
         Ok(Session::builder()?
             .with_intra_threads(1)?
@@ -315,6 +325,10 @@ where
         "Deskew requires page orientation"
     );
     let local_abort = AtomicBool::new(false);
+    ensure!(
+        config.dense_detection.valid(),
+        "Invalid dense detector parameters"
+    );
     let abort = cancel.unwrap_or(&local_abort);
     let metrics = Metrics::default();
     let began = Instant::now();
@@ -497,35 +511,77 @@ where
                     while let Some(item) = recv(&rx, abort)? {
                         let start = Instant::now();
                         let p = item.prepared;
-                        let mut words = detection::boxes(
+                        let (mut words, mut full_candidates) = detection::boxes_and_thin(
                             &item.probability,
                             config.size,
                             config.size,
                             p.image.height() as usize,
                             p.image.width() as usize,
+                            detection::Params::default(),
+                            config.thin_recovery,
                         );
+                        for word in &mut full_candidates {
+                            word.thin_recovery.as_mut().unwrap().source = "full_page".into();
+                        }
+                        let mut thin_candidates = Vec::new();
                         let refinement_tiles = item
                             .refined
                             .iter()
                             .map(|(t, _)| t.clone())
                             .collect::<Vec<_>>();
+                        let mut tile_words = Vec::new();
                         for (tile, probability) in item.refined {
-                            let extra = detection::boxes(
+                            let (extra, mut candidates) = detection::boxes_and_thin(
                                 &probability,
                                 refinement::SIZE,
                                 refinement::SIZE,
                                 tile.height as usize,
                                 tile.width as usize,
+                                config.dense_detection,
+                                config.thin_recovery,
                             );
+                            for word in &mut candidates {
+                                word.thin_recovery.as_mut().unwrap().source = "dense_tile".into();
+                            }
+                            let mut owned = Vec::new();
                             refinement::merge(
-                                &mut words,
-                                extra,
+                                &mut owned,
+                                candidates,
                                 &tile,
                                 p.image.width(),
                                 p.image.height(),
                             );
+                            thin_candidates.extend(owned);
+                            tile_words.push((tile, extra));
                         }
-                        let (crops, maps) = crops::extract(&p.image, &words)?;
+                        refinement::merge_tiles(
+                            &mut words,
+                            tile_words,
+                            p.image.width(),
+                            p.image.height(),
+                        );
+                        let (mut crops, mut maps) = crops::extract(&p.image, &words)?;
+                        if config.line_guided_orientation {
+                            crate::line_orientation::prepare(
+                                &p.image, &mut words, &mut crops, &mut maps,
+                            );
+                        }
+                        thin_candidates.append(&mut full_candidates);
+                        let original_words = words.len();
+                        crate::thin_recovery::append(
+                            &mut words,
+                            thin_candidates,
+                            p.image.width(),
+                            p.image.height(),
+                        );
+                        let (extra_crops, mut extra_maps) =
+                            crops::extract(&p.image, &words[original_words..])?;
+                        for m in &mut extra_maps {
+                            m.start += crops.len();
+                            m.end += crops.len();
+                        }
+                        crops.extend(extra_crops);
+                        maps.extend(extra_maps);
                         drop(p.image);
                         let count = crops.len();
                         let page = Arc::new(Mutex::new(Accumulator {
@@ -621,6 +677,7 @@ where
                                 .collect::<Vec<_>>();
                             let mut words = std::mem::take(&mut p.words);
                             crops::remap(&mut words, &parts, &p.maps);
+                            crate::thin_recovery::retain_accepted(&mut words);
                             send(
                                 done,
                                 Complete {

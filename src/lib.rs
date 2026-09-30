@@ -1,6 +1,7 @@
 pub mod crops;
 pub mod detection;
 pub mod gpu;
+pub mod line_orientation;
 pub mod orientation;
 pub mod pipeline;
 pub mod preprocess;
@@ -80,3 +81,5 @@ pub fn recognize(logits: &[f32], shape: &[i64], vocab: &str) -> Result<Vec<(Stri
     }
     Ok(results)
 }
+
+pub mod thin_recovery;

@@ -1,6 +1,6 @@
 [project]
 name = "rustydoctr"
-version = "0.1.0"
+version = "0.2.0"
 description = "Bounded Rust/CUDA word OCR with a Python streaming interface"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -21,4 +21,5 @@ include = [
 
 [project.optional-dependencies]
 runtime = ["onnxruntime-gpu==1.23.2"]
+gpu = ["onnxruntime-gpu[cuda,cudnn]==1.23.2"]
 examples = ["pymupdf>=1.28.2", "Pillow>=11"]

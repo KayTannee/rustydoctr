@@ -1,15 +1,34 @@
 # Use Rust OCR from Python
 
+For another Windows NVIDIA machine, use the transfer ZIP and
+[deployment instructions](PYTHON_DEPLOYMENT.md). The wheel is version 0.2.0,
+CPython 3.12+ / Windows x64. Run VS Code **Python: build transfer ZIP** to rebuild
+the wheel, install it into the local baseline environment, and package models,
+configs, examples and checksums. **OCR: build Python wheel** builds/installs only
+the wheel. **Python: check installed CUDA stream** tests backpressure/shutdown.
+
+
 Build/install the wheel into the existing benchmark environment:
 
+Build-machine prerequisites: Rust MSVC toolchain, Visual Studio C++ Build Tools,
+`uv`, and `.venv-baseline` with Python 3.12+ and `maturin>=1.9,<2`.
+Install the build frontend if needed with
+`uv pip install --python .venv-baseline/Scripts/python.exe "maturin>=1.9,<2"`.
+The ZIP task also requires the exported models in `models/` and generated
+`testdata/generated/a4_control.png`. These prerequisites apply to rebuilding,
+not installing the transfer ZIP on another PC.
+
 ```powershell
-./scripts/build_python.ps1
+./scripts/build_python.ps1 -Install
 ```
 
 The distributable wheel is in `dist/`. It contains Rust plus the Python wrapper;
-model weights, ONNX Runtime and CUDA/cuDNN DLLs remain external. This tested setup
-uses Python 3.12+, ORT GPU 1.23.2 and CUDA 12/cuDNN 9 from the baseline environment.
-The wrapper finds ORT and Torch's DLL directories without importing Torch.
+model weights, ONNX Runtime and CUDA/cuDNN DLLs remain external. The transfer ZIP
+includes model weights; the `gpu` extra installs the NVIDIA runtime dependencies
+without requiring Torch. This tested setup
+uses Python 3.12+, ORT GPU 1.23.2 and separately installed CUDA 12/cuDNN 9 packages.
+The wrapper finds ORT and uses its DLL preloader for pip-installed NVIDIA
+runtimes or an existing compatible Torch installation, without importing Torch.
 For another deployment, set `ORT_DYLIB_PATH` and, on Windows,
 `RUSTYDOCTR_DLL_DIRS` (semicolon-separated). CUDA is required; no silent CPU fallback.
 
@@ -69,8 +88,10 @@ pages. Keep one producer and one consumer. Heavy Python postprocessing may need 
 separate bounded process pool; the example's independent consumer writes JSONL.
 
 This slice does **word OCR**, with optional [page orientation and fractional
-deskew](PAGE_ORIENTATION.md). Local text rotation, recognition retries, line/block
-assembly and table/layout analysis are not implemented yet.
+deskew](PAGE_ORIENTATION.md). Experimental [line-guided crop alternatives](LINE_ORIENTATION.md)
+are available with `config["line_guided_orientation"] = True`; they retain per-word
+`crop_decision` diagnostics and default to off. General mixed local rotation,
+line/block assembly and table/layout analysis remain incomplete.
 
 Experimental dense-text refinement is opt-in after rebuilding the wheel:
 
@@ -86,5 +107,19 @@ This selects at most one band (at most 25% of page height), detects two overlapp
 1024 tiles, reconciles boxes, then recognizes once. Output `refinement_tiles`
 records source-pixel crop bounds and center-ownership intervals. No selection
 returns an empty list. Missing `dense_refine` defaults to false for old profiles.
-It adds CPU work, host buffers and detector passes; remeasure memory and throughput
+
+Optional tile-only detector settings live in `config["dense_detection"]`.
+See [the tuning results and configuration example](DENSE_TUNING.md); defaults
+remain unchanged and full-page detection is unaffected.
+
+Set `config["thin_recovery"] = True` to opt into bounded recovery of thin words
+discarded by detector cleanup. It reuses the same streaming queues and models.
+Accepted words carry a `thin_recovery` evidence object; the flag defaults to false.
+See [native recovery controls and results](THIN_RECOVERY.md).
+Dense refinement adds detector passes; thin recovery alone reuses existing maps.
+These options add CPU work and host buffers; remeasure memory and throughput
 before enabling it on a small GPU. It does not correct page/local rotation.
+
+Thin recovery now includes one-hop line support for otherwise omitted narrow
+characters. Dense refinement also reconciles seam ownership. Both share the
+existing streaming queues and page admission limit; see [THIN_RECOVERY.md](THIN_RECOVERY.md).

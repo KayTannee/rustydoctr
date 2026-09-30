@@ -58,6 +58,9 @@ impl RawStream {
     #[new]
     fn new(py: Python<'_>, models: PathBuf, config_json: &str) -> PyResult<Self> {
         let config: Config = serde_json::from_str(config_json).map_err(pyerr)?;
+        if !config.dense_detection.valid() {
+            return Err(PyValueError::new_err("Invalid dense detector parameters"));
+        }
         if config.deskew && !config.page_orientation {
             return Err(PyValueError::new_err("deskew requires page_orientation"));
         }

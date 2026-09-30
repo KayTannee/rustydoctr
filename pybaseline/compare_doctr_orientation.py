@@ -68,7 +68,7 @@ def raster_audit(out,fixtures,manifest):
     from PIL import Image
     from doctr.utils.geometry import straighten_page
     pages={p['id']:p for p in manifest['pages']};audit=[]
-    for row in json.loads((out/'doctr_default_upright.json').read_text()):
+    for row in json.loads((out/'doctr_default_upright.json').read_text(encoding='utf-8')):
         if row['page']=='text_scale':continue
         with Image.open(fixtures/pages[row['page']]['image']) as source:image=np.array(source.convert('RGB'))
         angle=row['page_orientation']['value'];preserved,_=straighten_page(image,angle);default,_=default_straightening_inverse(image,angle)
@@ -134,7 +134,7 @@ def worker(mode,out):
                         quads[id(word)]=xy[:,:2].tolist()
         return original_remap(document,orig_shapes,straight_shapes,inverses,orig_pages)
     predictor._remap_to_original_coords=remap
-    fixtures=ROOT/'output/pdf/quality';manifest=json.loads((fixtures/'manifest.json').read_text())
+    fixtures=ROOT/'output/pdf/quality';manifest=json.loads((fixtures/'manifest.json').read_text(encoding='utf-8'))
     pages=manifest['pages'];rows=[]
     with Image.open(fixtures/pages[0]['image']) as source:
         predictor([np.array(source.convert('RGB'))])
@@ -181,11 +181,11 @@ def main():
     if args.worker:
         worker(args.worker,out);return
     out.mkdir(parents=True,exist_ok=False)
-    original=json.loads((args.rust_results/'provenance.json').read_text())
+    original=json.loads((args.rust_results/'provenance.json').read_text(encoding='utf-8'))
     for path in ['models/db_resnet34.onnx','models/parseq.onnx','models/page_orientation.onnx','output/pdf/quality/manifest.json']:
         expected=original.get(path,original.get(path.replace('/','\\')))
         assert expected==digest(ROOT/path),f'Stale Rust reference: {path}'
-    fixtures=ROOT/'output/pdf/quality';manifest=json.loads((fixtures/'manifest.json').read_text())
+    fixtures=ROOT/'output/pdf/quality';manifest=json.loads((fixtures/'manifest.json').read_text(encoding='utf-8'))
     sources=[ROOT/'.venv-baseline/Lib/site-packages/doctr/models/_utils.py',ROOT/'.venv-baseline/Lib/site-packages/doctr/models/predictor/base.py',ROOT/'.venv-baseline/Lib/site-packages/doctr/models/predictor/pytorch.py',ROOT/'.venv-baseline/Lib/site-packages/doctr/utils/geometry.py']
     provenance={str(p.relative_to(ROOT)):digest(p) for p in sources}
     provenance.update({str((fixtures/p['image']).relative_to(ROOT)):digest(fixtures/p['image']) for p in manifest['pages']})
@@ -194,7 +194,7 @@ def main():
         subprocess.run([sys.executable,'-u','-m','pybaseline.compare_doctr_orientation','--worker',mode,'--output',str(out)],cwd=ROOT,check=True,timeout=1200)
     rust=[]
     for mode in ['base','quarter','deskew','refined']:
-        summary=json.loads((args.rust_results/mode/'summary.json').read_text())
+        summary=json.loads((args.rust_results/mode/'summary.json').read_text(encoding='utf-8'))
         records={r['id']:r for r in summary['first_pages'].values()}
         for page in manifest['pages']:
             record=records[page['id']];words=[dict(w,polygon=w.get('quadrilateral',w['polygon'])) for w in record['words']]

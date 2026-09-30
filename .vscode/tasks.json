@@ -2,6 +2,42 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "OCR: tune dense-tile detection",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv-baseline/Scripts/python.exe",
+      "args": [
+        "scripts/tune_dense_detection.py"
+      ],
+      "dependsOn": [
+        "Rust: build vertical slice",
+        "OCR: generate quality sample pages (CPU only)",
+        "OCR: export page orientation model (CPU only)"
+      ],
+      "dependsOrder": "sequence",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "OCR: test line-guided crop orientation",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv-baseline/Scripts/python.exe",
+      "args": [
+        "scripts/check_line_orientation.py"
+      ],
+      "dependsOn": [
+        "Rust: build vertical slice",
+        "OCR: generate quality sample pages (CPU only)",
+        "OCR: export page orientation model (CPU only)"
+      ],
+      "dependsOrder": "sequence",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "OCR: generate quality sample pages (CPU only)",
       "type": "process",
       "command": "${workspaceFolder}/.venv-baseline/Scripts/python.exe",
@@ -22,7 +58,8 @@
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        "${workspaceFolder}/scripts/build_python.ps1"
+        "${workspaceFolder}/scripts/build_python.ps1",
+        "-Install"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -245,6 +282,158 @@
       },
       "runOptions": {
         "instanceLimit": 1
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "OCR: benchmark native thin recovery",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv-baseline/Scripts/python.exe",
+      "args": [
+        "-u",
+        "scripts/benchmark_thin_recovery.py",
+        "--pages",
+        "340"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": [],
+      "dependsOn": [
+        "Rust: build vertical slice"
+      ],
+      "dependsOrder": "sequence",
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "OCR: download public datasets",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv-baseline/Scripts/python.exe",
+      "args": [
+        "scripts/download_public_datasets.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "dependsOn": [],
+      "dependsOrder": "sequence",
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "OCR: prepare public test sets",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv-baseline/Scripts/python.exe",
+      "args": [
+        "scripts/prepare_public_datasets.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "dependsOn": [
+        "OCR: download public datasets"
+      ],
+      "dependsOrder": "sequence",
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "OCR: benchmark public test sets",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv-baseline/Scripts/python.exe",
+      "args": [
+        "scripts/benchmark_public.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "dependsOn": [
+        "Rust: build vertical slice",
+        "OCR: prepare public test sets"
+      ],
+      "dependsOrder": "sequence",
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "OCR: score public test sets",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv-baseline/Scripts/python.exe",
+      "args": [
+        "scripts/score_public.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "dependsOn": [
+        "OCR: benchmark public test sets"
+      ],
+      "dependsOrder": "sequence",
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "OCR: report public test sets",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv-baseline/Scripts/python.exe",
+      "args": [
+        "scripts/report_public.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "dependsOn": [
+        "OCR: score public test sets"
+      ],
+      "dependsOrder": "sequence",
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "Python: build transfer ZIP",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv-baseline/Scripts/python.exe",
+      "args": [
+        "scripts/package_python.py"
+      ],
+      "dependsOn": [
+        "OCR: build Python wheel"
+      ],
+      "dependsOrder": "sequence",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Python: check installed CUDA stream",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv-baseline/Scripts/python.exe",
+      "args": [
+        "scripts/check_python_stream.py"
+      ],
+      "dependsOn": [
+        "OCR: build Python wheel"
+      ],
+      "dependsOrder": "sequence",
+      "options": {
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": []
     }

@@ -1,0 +1,26 @@
+[
+  {
+    "source": "pybaseline\\results\\remaining_60_v1\\chain",
+    "totals": {
+      "proposed": 24,
+      "accepted": 22,
+      "correct": 21,
+      "other": 1,
+      "missing_before": 60,
+      "missing_after": 38,
+      "strict_gain": 8
+    }
+  },
+  {
+    "source": "pybaseline\\results\\anchor_holdout_v1\\chain",
+    "totals": {
+      "proposed": 16,
+      "accepted": 16,
+      "correct": 16,
+      "other": 0,
+      "missing_before": 20,
+      "missing_after": 4,
+      "strict_gain": 0
+    }
+  }
+]

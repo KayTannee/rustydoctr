@@ -17,5 +17,5 @@ https://github.com/mindee/doctr/tree/v1.1.0.
 Changes: Rust reimplementation, connected-component bounds in place of external
 contour bounds for the upright path, analytical axis-aligned rectangle expansion,
 native resize and JSON output, and wide-crop splitting/string remapping in the
-bounded pipeline. Rotation and layout are not implemented. Model weights are exported locally from the installed docTR checkpoint
+bounded pipeline. Optional page orientation, fractional deskew and experimental crop-orientation/refinement paths are implemented; document layout is not. Model weights are exported locally from the installed docTR checkpoint
 cache and are not committed. Cargo.lock records the Rust dependency versions.

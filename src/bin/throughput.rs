@@ -21,6 +21,21 @@ use std::{
 #[derive(Parser, Debug)]
 #[command(about = "Bounded CPU/GPU word-OCR pipeline with optional measured batch calibration")]
 struct Args {
+    /// Experimental bounded recovery of thin components discarded by detector cleanup.
+    #[arg(long)]
+    thin_recovery: bool,
+    /// Dense tiles only: probability threshold (full-page settings remain fixed).
+    #[arg(long, default_value_t = 0.3)]
+    dense_bin_thresh: f32,
+    /// Dense tiles only: minimum detection objectness.
+    #[arg(long, default_value_t = 0.1)]
+    dense_box_thresh: f32,
+    /// Dense tiles only: box expansion ratio.
+    #[arg(long, default_value_t = 1.5)]
+    dense_unclip_ratio: f64,
+    /// Experimental line-supported crop framing and bounded local quarter-turn trials.
+    #[arg(long)]
+    line_guided_orientation: bool,
     /// Correct coarse page direction on CPU before detection.
     #[arg(long)]
     page_orientation: bool,
@@ -102,6 +117,20 @@ fn signature(summary: &Value) -> Value {
 }
 fn child(a: &Args, config: &Config, output: &Path, pages: usize, seconds: f64) -> Result<bool> {
     let mut command = Command::new(std::env::current_exe()?);
+    command.args([
+        "--dense-bin-thresh",
+        &config.dense_detection.bin_thresh.to_string(),
+        "--dense-box-thresh",
+        &config.dense_detection.box_thresh.to_string(),
+        "--dense-unclip-ratio",
+        &config.dense_detection.unclip_ratio.to_string(),
+    ]);
+    if config.thin_recovery {
+        command.arg("--thin-recovery");
+    }
+    if config.line_guided_orientation {
+        command.arg("--line-guided-orientation");
+    }
     if config.page_orientation {
         command.arg("--page-orientation");
     }
@@ -220,14 +249,32 @@ fn main() -> Result<()> {
             0
         };
     let per_page = per_page
+        + if a.line_guided_orientation {
+            3_000_000
+        } else {
+            0
+        }
         + if a.page_orientation {
             max_pixels * 6
+        } else {
+            0
+        };
+    let per_page = per_page
+        + if a.thin_recovery {
+            a.size * a.size * 10 + 3_000_000
         } else {
             0
         };
     let automatic_inflight =
         (a.host_mib * 1048576 / per_page).clamp(1, if a.vram_4gb { 2 } else { 8 });
     let config = Config {
+        thin_recovery: a.thin_recovery,
+        dense_detection: rustydoctr::detection::Params {
+            bin_thresh: a.dense_bin_thresh,
+            box_thresh: a.dense_box_thresh,
+            unclip_ratio: a.dense_unclip_ratio,
+        },
+        line_guided_orientation: a.line_guided_orientation,
         page_orientation: a.page_orientation,
         deskew: a.deskew,
         dense_refine: a.dense_refine,
@@ -402,7 +449,7 @@ fn main() -> Result<()> {
         r["warmup_seconds"] = json!(warmup.wall_seconds);
         r["model"] = json!("db_resnet34 + parseq");
         r["scope"] = json!(
-            "Warm-cache decode, bounded interleaved word OCR with cross-page crop batches, ordered JSONL flush/fsync. Load/warmup excluded. Optional CPU page orientation, deskew and dense refinement are recorded in config. No local orientation or document layout."
+            "Warm-cache decode, bounded interleaved word OCR with cross-page crop batches, ordered JSONL flush/fsync. Load/warmup excluded. Optional CPU page orientation, deskew, dense refinement and experimental line-guided crop alternatives are recorded in config. No document layout."
         );
         Ok(r)
     })();

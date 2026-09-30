@@ -1,6 +1,6 @@
 [package]
 name = "rustydoctr"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 default-run = "rustydoctr"
 
@@ -23,3 +23,7 @@ pyo3 = { version = "0.27", optional = true, features = ["abi3-py312"] }
 
 [profile.release]
 debug = 1
+
+[[bin]]
+name = "heatmap_probe"
+path = "scripts/heatmap_probe.rs"

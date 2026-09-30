@@ -7,6 +7,7 @@ pub struct Mapping {
     pub start: usize,
     pub end: usize,
     pub last_overlap: f64,
+    pub alternatives: Vec<(usize, i16)>,
 }
 
 pub fn extract(image: &RgbImage, words: &[Word]) -> Result<(Vec<RgbImage>, Vec<Mapping>)> {
@@ -48,6 +49,7 @@ pub fn extract(image: &RgbImage, words: &[Word]) -> Result<(Vec<RgbImage>, Vec<M
             start,
             end: crops.len(),
             last_overlap,
+            alternatives: vec![],
         });
     }
     Ok((crops, maps))
@@ -110,6 +112,35 @@ pub fn remap(words: &mut [Word], parts: &[(String, f32)], maps: &[Mapping]) {
         }
         word.text = text;
         word.confidence = slice.iter().map(|p| p.1).sum::<f32>() / slice.len() as f32;
+        if let Some(decision) = &mut word.crop_decision {
+            decision.original_text = word.text.clone();
+            decision.original_confidence = word.confidence;
+            for &(index, rotation) in &m.alternatives {
+                let (text, confidence) = &parts[index];
+                decision
+                    .candidates
+                    .push(crate::line_orientation::Candidate {
+                        rotation_deg: rotation,
+                        text: text.clone(),
+                        confidence: *confidence,
+                    });
+                // Confidence is only a gate after geometric evidence, not proof of accuracy.
+                if *confidence >= 0.9
+                    && *confidence > decision.original_confidence + 0.15
+                    && *confidence > word.confidence
+                    && (rotation == 0
+                        || m.alternatives.iter().all(|&(other, angle)| {
+                            angle == rotation || *confidence > parts[other].1 + 0.1
+                        }))
+                    && !text.is_empty()
+                    && (rotation == 0 || text.chars().count() >= 2)
+                {
+                    word.text = text.clone();
+                    word.confidence = *confidence;
+                    decision.selected_rotation_deg = Some(rotation);
+                }
+            }
+        }
     }
 }
 #[cfg(test)]
@@ -133,6 +164,8 @@ mod tests {
     fn splitting_covers_end() {
         let img = RgbImage::new(105, 10);
         let w = Word {
+            thin_recovery: None,
+            crop_decision: None,
             quadrilateral: None,
             polygon: [[0., 0.], [1., 1.]],
             objectness: 1.,

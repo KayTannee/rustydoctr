@@ -14,3 +14,7 @@ dist/
 profiles/
 
 output/pdf/quality/
+
+testdata/public/
+
+python/rustydoctr/*.pyd

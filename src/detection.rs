@@ -4,8 +4,38 @@
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Params {
+    pub bin_thresh: f32,
+    pub box_thresh: f32,
+    pub unclip_ratio: f64,
+}
+impl Default for Params {
+    fn default() -> Self {
+        Self {
+            bin_thresh: 0.3,
+            box_thresh: 0.1,
+            unclip_ratio: 1.5,
+        }
+    }
+}
+impl Params {
+    pub fn valid(self) -> bool {
+        self.bin_thresh > 0.
+            && self.bin_thresh < 1.
+            && (0.0..=1.0).contains(&self.box_thresh)
+            && self.unclip_ratio.is_finite()
+            && (0.0..=5.0).contains(&self.unclip_ratio)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Word {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thin_recovery: Option<crate::thin_recovery::Evidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crop_decision: Option<crate::line_orientation::Decision>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quadrilateral: Option<[[f32; 2]; 4]>,
     pub polygon: [[f32; 2]; 2],
@@ -15,8 +45,31 @@ pub struct Word {
 }
 
 pub fn boxes(prob: &[f32], h: usize, w: usize, ih: usize, iw: usize) -> Vec<Word> {
+    boxes_with_params(prob, h, w, ih, iw, Params::default())
+}
+pub fn boxes_with_params(
+    prob: &[f32],
+    h: usize,
+    w: usize,
+    ih: usize,
+    iw: usize,
+    params: Params,
+) -> Vec<Word> {
+    boxes_and_thin(prob, h, w, ih, iw, params, false).0
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn boxes_and_thin(
+    prob: &[f32],
+    h: usize,
+    w: usize,
+    ih: usize,
+    iw: usize,
+    params: Params,
+    recover: bool,
+) -> (Vec<Word>, Vec<Word>) {
     let n = h * w;
-    let mask: Vec<bool> = prob.iter().map(|&p| p >= 0.3).collect();
+    let mask: Vec<bool> = prob.iter().map(|&p| p >= params.bin_thresh).collect();
     let mut eroded = vec![true; n];
     let mut opened = vec![false; n];
     for y in 0..h {
@@ -61,6 +114,7 @@ pub fn boxes(prob: &[f32], h: usize, w: usize, ih: usize, iw: usize) -> Vec<Word
     }
     let mut seen = vec![false; n];
     let mut result = Vec::new();
+    let mut anchors = Vec::new();
     for start in 0..n {
         if !opened[start] || seen[start] {
             continue;
@@ -87,6 +141,14 @@ pub fn boxes(prob: &[f32], h: usize, w: usize, ih: usize, iw: usize) -> Vec<Word
                 }
             }
         }
+        if recover && x1 - x0 + 1 >= 3 && y1 - y0 + 1 >= 4 && x1 - x0 >= y1 - y0 {
+            anchors.push([
+                x0 as f64,
+                y0 as f64,
+                (x1 - x0 + 1) as f64,
+                (y1 - y0 + 1) as f64,
+            ]);
+        }
         if !external || x1 - x0 < 2 || y1 - y0 < 2 {
             continue;
         }
@@ -99,12 +161,12 @@ pub fn boxes(prob: &[f32], h: usize, w: usize, ih: usize, iw: usize) -> Vec<Word
             }
         }
         score /= ((sx1 - x0 + 1) * (sy1 - y0 + 1)) as f32;
-        if score < 0.1 {
+        if score < params.box_thresh {
             continue;
         }
         // Clipper rounds expanded vertex coordinates, not the distance itself.
         // At half-pixel offsets those differ on the minimum edges.
-        let distance = bw as f64 * bh as f64 * 1.5 / (2. * (bw as f64 + bh as f64));
+        let distance = bw as f64 * bh as f64 * params.unclip_ratio / (2. * (bw as f64 + bh as f64));
         let mut b = [
             ((x0 as f64 - distance).round() as f32 / w as f32).clamp(0., 1.),
             ((y0 as f64 - distance).round() as f32 / h as f32).clamp(0., 1.),
@@ -122,6 +184,8 @@ pub fn boxes(prob: &[f32], h: usize, w: usize, ih: usize, iw: usize) -> Vec<Word
         }
         if b[2] > b[0] && b[3] > b[1] {
             result.push(Word {
+                thin_recovery: None,
+                crop_decision: None,
                 quadrilateral: None,
                 polygon: [[b[0], b[1]], [b[2], b[3]]],
                 objectness: score,
@@ -132,12 +196,120 @@ pub fn boxes(prob: &[f32], h: usize, w: usize, ih: usize, iw: usize) -> Vec<Word
     }
     // OpenCV RETR_EXTERNAL returns contours in reverse raster discovery order.
     result.reverse();
-    result
+    let recovered = if recover {
+        crate::thin_recovery::propose(
+            prob,
+            &mask,
+            &opened,
+            &anchors,
+            crate::thin_recovery::Geometry {
+                height: h,
+                width: w,
+                image_height: ih,
+                image_width: iw,
+            },
+        )
+    } else {
+        vec![]
+    };
+    (result, recovered)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn tile_threshold_can_separate_a_weak_bridge() {
+        let mut p = vec![0.; 40 * 20];
+        for y in 5..13 {
+            for x in (5..13).chain(18..26) {
+                p[y * 40 + x] = 0.9;
+            }
+        }
+        for y in 8..11 {
+            for x in 13..18 {
+                p[y * 40 + x] = 0.35;
+            }
+        }
+        assert_eq!(boxes(&p, 20, 40, 20, 40).len(), 1);
+        let params = Params {
+            bin_thresh: 0.5,
+            ..Params::default()
+        };
+        assert_eq!(boxes_with_params(&p, 20, 40, 20, 40, params).len(), 2);
+        assert!(
+            boxes_with_params(
+                &p,
+                20,
+                40,
+                20,
+                40,
+                Params {
+                    box_thresh: 0.99,
+                    ..params
+                }
+            )
+            .is_empty()
+        );
+    }
+    #[test]
+    fn expansion_changes_bounds_without_splitting_components() {
+        let mut p = vec![0.; 400];
+        for y in 6..10 {
+            for x in 5..13 {
+                p[y * 20 + x] = 1.;
+            }
+        }
+        let a = boxes(&p, 20, 20, 20, 20);
+        let b = boxes_with_params(
+            &p,
+            20,
+            20,
+            20,
+            20,
+            Params {
+                unclip_ratio: 0.,
+                ..Params::default()
+            },
+        );
+        assert_eq!(a.len(), b.len());
+        assert!(a[0].polygon[0][0] < b[0].polygon[0][0]);
+        assert!(a[0].polygon[1][0] > b[0].polygon[1][0]);
+    }
+    #[test]
+    fn parameter_defaults_and_invalid_values() {
+        let p: Params = serde_json::from_str("{\"bin_thresh\":0.4}").unwrap();
+        assert_eq!(p.unclip_ratio, 1.5);
+        assert!(p.valid());
+        assert!(
+            !Params {
+                bin_thresh: f32::NAN,
+                ..p
+            }
+            .valid()
+        );
+        assert!(
+            !Params {
+                bin_thresh: 1.,
+                ..p
+            }
+            .valid()
+        );
+        assert!(
+            !Params {
+                unclip_ratio: -1.,
+                ..p
+            }
+            .valid()
+        );
+        assert!(
+            !Params {
+                box_thresh: f32::INFINITY,
+                ..p
+            }
+            .valid()
+        );
+    }
     #[test]
     fn matches_doctr_fixtures() {
         let cases: serde_json::Value =

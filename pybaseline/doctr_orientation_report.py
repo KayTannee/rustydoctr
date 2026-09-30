@@ -26,8 +26,8 @@ def main():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('directory',type=Path);a=p.parse_args();out=a.directory.resolve()
  rows=[]
  for mode in NAMES:
-  if mode.startswith('doctr_'):rows.extend(json.loads((out/f'{mode}.json').read_text()))
- rows.extend(json.loads((out/'rust.json').read_text()))
+  if mode.startswith('doctr_'):rows.extend(json.loads((out/f'{mode}.json').read_text(encoding='utf-8')))
+ rows.extend(json.loads((out/'rust.json').read_text(encoding='utf-8')))
  statements=[r for r in rows if r['page']!='text_scale']
  parts=['''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>docTR versus Rust rotation</title><style>body{font:16px system-ui;color:#203247;background:#f5f7fb;max-width:1350px;margin:30px auto;padding:0 20px}p,li{line-height:1.6}th,td{padding:9px 12px;border-bottom:1px solid #d6dde6;text-align:left}th{background:#223d58;color:white}table{border-collapse:collapse;background:white;width:100%}.scroll{overflow:auto}h2{margin-top:32px}.note{background:#e5eef9;padding:14px;border-left:4px solid #3478bd}summary{padding:12px;background:#e3eaf3;cursor:pointer}svg{width:100%;max-width:1000px}</style>
  <h1>Python docTR versus Rust: rotation and deskew</h1>
@@ -71,9 +71,9 @@ def main():
   geometry_rows.append([NAMES[mode],sum(r['scores']['0.5']['exact'] for r in rr),sum(r['returned_geometry_score']['exact'] for r in rr) if rr[0]['returned_geometry_score'] is not None else 'rectified coordinates: not directly comparable'])
  parts.append('<h2>Coordinate audit</h2><p>Both preserve_original_coords settings are tested: the installed version uses different straightening implementations for them, which changes the raster itself. With preservation enabled, a read-only observer retains quadrilaterals using docTR’s own inverse before its upright boxes are reduced to envelopes. With the default setting, an observer reconstructs the pad/rotate/crop transform and asserts byte-for-byte equality with the actual rectified raster before mapping predictions back. Neither observer changes model inputs, angles or predictions. Main scores use original-image quadrilaterals.</p>'+table(['docTR mode','Quadrilateral exact','Public geometry exact'],geometry_rows))
  if (out/'raster_audit.json').exists():
-  raster=json.loads((out/'raster_audit.json').read_text())
+  raster=json.loads((out/'raster_audit.json').read_text(encoding='utf-8'))
   parts.append('<p>The CPU raster audit confirms this is more than an output-coordinate difference. Extra black padding changes the effective text scale at the fixed detector input. Example quarter-turn rasters (height × width):</p>'+table(['Page','preserve_original_coords=True','Default False','Preserve black pixels','Default black pixels'],[[r['page'],r['preserve_shape'],r['default_shape'],f"{r['preserve_black_fraction']:.1%}",f"{r['default_black_fraction']:.1%}"] for r in raster if r['page'] in ['statement_1_cw0','statement_1_cw90','statement_1_cw180','statement_1_cw270']]))
- fixtures=Path('output/pdf/quality').resolve();manifest=json.loads((fixtures/'manifest.json').read_text())
+ fixtures=Path('output/pdf/quality').resolve();manifest=json.loads((fixtures/'manifest.json').read_text(encoding='utf-8'))
  parts.append('<h2>Inspect original-coordinate predictions</h2><p>Green: labels. Red: predictions. Hover each polygon to inspect its text.</p>')
  for page_id in ['statement_0_cw0','statement_0_cw90.5']:
   page=next(p for p in manifest['pages'] if p['id']==page_id)

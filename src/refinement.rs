@@ -4,7 +4,7 @@ use image::RgbImage;
 use serde::Serialize;
 
 pub const SIZE: usize = 1024;
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, serde::Deserialize)]
 pub struct Tile {
     pub x: u32,
     pub y: u32,
@@ -123,6 +123,89 @@ pub fn select(image: &RgbImage, size: usize) -> Vec<Tile> {
         .collect()
 }
 
+/// Jointly reconcile seam disagreements, retaining the usual ownership elsewhere.
+/// A fallback needs two overlapping tile detections (IoU >= 0.5), not just one
+/// clipped observation. Recognition still runs only once for the chosen box.
+pub fn merge_tiles(base: &mut Vec<Word>, tiles: Vec<(Tile, Vec<Word>)>, w: u32, h: u32) {
+    let mapped: Vec<Vec<Word>> = tiles
+        .iter()
+        .map(|(tile, words)| {
+            words
+                .iter()
+                .cloned()
+                .map(|mut word| {
+                    for p in &mut word.polygon {
+                        p[0] = (p[0] * tile.width as f32 + tile.x as f32) / w as f32;
+                        p[1] = (p[1] * tile.height as f32 + tile.y as f32) / h as f32;
+                    }
+                    word
+                })
+                .collect()
+        })
+        .collect();
+    let owns = |word: &Word, tile: &Tile| {
+        let x = (word.polygon[0][0] + word.polygon[1][0]) * 0.5 * w as f32;
+        x >= tile.owner_start as f32 && x < tile.owner_end as f32
+    };
+    let mut fallback = Vec::new();
+    let mut discard = Vec::new();
+    for i in 0..tiles.len() {
+        for j in i + 1..tiles.len() {
+            for a in &mapped[i] {
+                for b in &mapped[j] {
+                    let seam = tiles[i].0.owner_end as f32 / w as f32;
+                    if tiles[i].0.owner_end != tiles[j].0.owner_start
+                        || a.polygon[0][0] > seam
+                        || a.polygon[1][0] < seam
+                        || b.polygon[0][0] > seam
+                        || b.polygon[1][0] < seam
+                        || box_iou(a, b) < 0.5
+                    {
+                        continue;
+                    }
+                    let (oa, ob) = (owns(a, &tiles[i].0), owns(b, &tiles[j].0));
+                    let (winner, loser) = if a.objectness >= b.objectness {
+                        (a, b)
+                    } else {
+                        (b, a)
+                    };
+                    if !oa && !ob {
+                        fallback.push(winner.clone());
+                    }
+                    if oa && ob {
+                        discard.push(loser.polygon);
+                    }
+                }
+            }
+        }
+    }
+    for (tile, words) in tiles {
+        merge(base, words, &tile, w, h);
+    }
+    for polygon in discard {
+        if let Some(index) = base.iter().position(|word| word.polygon == polygon) {
+            base.remove(index);
+        }
+    }
+    for word in fallback {
+        // Preserve any existing observation rather than introducing a duplicate.
+        if !base.iter().any(|other| box_iou(other, &word) > 0.) {
+            base.push(word);
+        }
+    }
+}
+
+fn box_iou(a: &Word, b: &Word) -> f32 {
+    let area = |word: &Word| {
+        (word.polygon[1][0] - word.polygon[0][0]).max(0.)
+            * (word.polygon[1][1] - word.polygon[0][1]).max(0.)
+    };
+    let intersection =
+        (a.polygon[1][0].min(b.polygon[1][0]) - a.polygon[0][0].max(b.polygon[0][0])).max(0.)
+            * (a.polygon[1][1].min(b.polygon[1][1]) - a.polygon[0][1].max(b.polygon[0][1])).max(0.);
+    intersection / (area(a) + area(b) - intersection).max(f32::EPSILON)
+}
+
 /// Reconcile before recognition. Empty tile detections retain the original words.
 pub fn merge(base: &mut Vec<Word>, mut words: Vec<Word>, tile: &Tile, w: u32, h: u32) {
     if words.is_empty() {
@@ -155,6 +238,8 @@ mod tests {
     use super::*;
     fn word(x: f32, y: f32) -> Word {
         Word {
+            thin_recovery: None,
+            crop_decision: None,
             quadrilateral: None,
             polygon: [[x - 0.01, y - 0.01], [x + 0.01, y + 0.01]],
             objectness: 1.,
@@ -206,6 +291,98 @@ mod tests {
                 .count(),
             1
         );
+    }
+    #[test]
+    fn joint_merge_handles_both_rejection_and_double_ownership() {
+        let left = Tile {
+            x: 0,
+            y: 50,
+            width: 60,
+            height: 20,
+            owner_start: 0,
+            owner_end: 50,
+        };
+        let right = Tile {
+            x: 40,
+            y: 50,
+            width: 60,
+            height: 20,
+            owner_start: 50,
+            owner_end: 100,
+        };
+        for (lx, rx) in [(50.1, 49.9), (49.9, 50.1), (50., 50.)] {
+            let mut base = vec![word(0.2, 0.1)];
+            merge_tiles(
+                &mut base,
+                vec![
+                    (left.clone(), vec![word(lx / 60., 0.5)]),
+                    (right.clone(), vec![word((rx - 40.) / 60., 0.5)]),
+                ],
+                100,
+                100,
+            );
+            assert_eq!(base.len(), 2, "seam pair {lx}, {rx}");
+            assert_eq!(base[0].polygon, word(0.2, 0.1).polygon);
+        }
+        let mut base = vec![word(0.2, 0.6)];
+        merge_tiles(
+            &mut base,
+            vec![(left.clone(), vec![]), (right.clone(), vec![])],
+            100,
+            100,
+        );
+        assert_eq!(base.len(), 1);
+        // A lone non-owned observation cannot recover a word by itself.
+        merge_tiles(
+            &mut base,
+            vec![(left, vec![word(50.1 / 60., 0.5)]), (right, vec![])],
+            100,
+            100,
+        );
+        assert_eq!(base.len(), 1);
+    }
+    #[test]
+    fn joint_merge_keeps_adjacent_words_and_prefers_supported_confidence() {
+        let left = Tile {
+            x: 0,
+            y: 50,
+            width: 60,
+            height: 20,
+            owner_start: 0,
+            owner_end: 50,
+        };
+        let right = Tile {
+            x: 40,
+            y: 50,
+            width: 60,
+            height: 20,
+            owner_start: 50,
+            owner_end: 100,
+        };
+        let mut a = word(50.1 / 60., 0.5);
+        a.objectness = 0.7;
+        let mut b = word(9.9 / 60., 0.5);
+        b.objectness = 0.9;
+        let mut base = vec![];
+        merge_tiles(
+            &mut base,
+            vec![(left.clone(), vec![a]), (right.clone(), vec![b])],
+            100,
+            100,
+        );
+        assert_eq!(base.len(), 1);
+        assert_eq!(base[0].objectness, 0.9);
+        base.clear();
+        merge_tiles(
+            &mut base,
+            vec![
+                (left, vec![word(48. / 60., 0.5)]),
+                (right, vec![word(12. / 60., 0.5)]),
+            ],
+            100,
+            100,
+        );
+        assert_eq!(base.len(), 2);
     }
     #[test]
     fn empty_and_large_blocks_do_not_trigger() {

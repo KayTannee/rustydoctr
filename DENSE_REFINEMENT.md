@@ -1,5 +1,8 @@
 # Experimental dense-text refinement
 
+Tile-specific detector controls and the accuracy sweep are documented in
+[DENSE_TUNING.md](DENSE_TUNING.md). The sweep retained the existing defaults.
+
 Opt-in, upright pages only. It keeps the existing detector/recognizer sessions
 and bounded queues. A page keeps its admission credit through both extra tiles.
 Default OCR behaviour is unchanged when the flag is omitted.

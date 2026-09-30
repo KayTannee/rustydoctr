@@ -19,7 +19,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path)
     args=parser.parse_args();out=(args.output or ROOT/'pybaseline/results'/('native_orientation_'+datetime.now().strftime('%Y%m%d-%H%M%S'))).resolve();out.mkdir(parents=True,exist_ok=False)
-    fixtures=ROOT/'output/pdf/quality';manifest=json.loads((fixtures/'manifest.json').read_text())
+    fixtures=ROOT/'output/pdf/quality';manifest=json.loads((fixtures/'manifest.json').read_text(encoding='utf-8'))
     pages=manifest['pages'];workload=out/'workload.json'
     workload.write_text(json.dumps({'pages':[{'id':p['id'],'image':str((fixtures/p['image']).resolve())} for p in pages]}))
     env=os.environ.copy();runtime=ROOT/'.venv-baseline/Lib/site-packages/onnxruntime/capi'
@@ -35,7 +35,7 @@ def main():
         subprocess.run([str(ROOT/'target/release/throughput.exe'),'--workload',str(workload),'--output',str(folder),
                         '--pages',str(len(pages)),'--size','1536','--reco-batch','256','--workers','2','--inflight','3',
                         '--arena-mib','6144','--det-arena-mib','4096',*flags],cwd=ROOT,env=env,check=True,timeout=1200)
-        summary=json.loads((folder/'summary.json').read_text())
+        summary=json.loads((folder/'summary.json').read_text(encoding='utf-8'))
         for i,page in enumerate(pages):
             record=summary['first_pages'][str(i)]
             words=[dict(w,polygon=w.get('quadrilateral',w['polygon'])) for w in record['words']]

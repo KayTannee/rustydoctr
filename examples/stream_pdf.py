@@ -8,7 +8,7 @@ import pymupdf
 from rustydoctr import Stream
 
 
-def process(pdfs, config, output, models="models", dpi=200):
+def process(pdfs, config, output, models="models", dpi=300):
     errors = []
     with Stream(models=models, config=config) as stream:
         def feed():
@@ -47,6 +47,6 @@ if __name__ == "__main__":
     parser.add_argument("--config", required=True)
     parser.add_argument("--models", default="models")
     parser.add_argument("--output", default="results.jsonl")
-    parser.add_argument("--dpi", type=int, default=200)
+    parser.add_argument("--dpi", type=int, default=300)
     args = parser.parse_args()
     print(json.dumps(process(args.pdfs, args.config, args.output, args.models, args.dpi), indent=2))
