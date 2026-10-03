@@ -56,8 +56,7 @@ def _runtime():
         raise RuntimeError('Install the GPU runtime: pip install "rustydoctr[gpu]"') from exc
     # Load pip-installed NVIDIA runtimes (or an existing compatible Torch runtime).
     # No Torch import or Python inference session is required.
-    if os.name == "nt":
-        ort.preload_dlls()
+    ort.preload_dlls()
 
 
 

@@ -4,6 +4,7 @@ Bounded Rust/CUDA word OCR with a Python streaming interface and reproducible do
 Rust code lives in `src/`; supporting tools live in `scripts/`, `pybaseline/`, and `pytests/`.
 
 - [Install the Python package on another Windows NVIDIA PC](docs/guides/PYTHON_DEPLOYMENT.md)
+- [Install the Linux NVIDIA package](docs/guides/LINUX_DEPLOYMENT.md)
 - [Build the Python library and stream rendered pages](docs/guides/PYTHON.md)
 - [Benchmark/profile a machine and save its parameters](docs/guides/BENCHMARK.md)
 - [Measured throughput and Python boundary results](docs/benchmarks/RESULTS.md)

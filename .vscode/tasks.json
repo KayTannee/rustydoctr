@@ -436,6 +436,52 @@
         "cwd": "${workspaceFolder}"
       },
       "problemMatcher": []
+    },
+    {
+      "label": "Python: build Linux wheel",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "scripts/build_python_linux.sh"
+      ],
+      "windows": {
+        "command": "wsl",
+        "args": [
+          "-d",
+          "Ubuntu",
+          "--",
+          "bash",
+          "scripts/build_python_linux.sh"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Python: build Linux transfer ZIP",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "scripts/build_python_linux.sh",
+        "--package"
+      ],
+      "windows": {
+        "command": "wsl",
+        "args": [
+          "-d",
+          "Ubuntu",
+          "--",
+          "bash",
+          "scripts/build_python_linux.sh",
+          "--package"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
     }
   ],
   "inputs": [

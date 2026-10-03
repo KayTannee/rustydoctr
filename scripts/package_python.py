@@ -1,15 +1,16 @@
-"""Assemble a Windows transfer bundle from the built wheel and verified local models."""
-import hashlib,importlib.util,json,shutil,zipfile,tempfile
+"""Assemble a platform-specific transfer bundle with verified local models."""
+import argparse,hashlib,importlib.util,json,shutil,zipfile,tempfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 VERSION='0.2.0'
-def build(staging):
-    wheel=ROOT/'dist'/f'rustydoctr-{VERSION}-cp312-abi3-win_amd64.whl'
+def build(staging, platform='windows'):
+    tag='win_amd64' if platform=='windows' else 'manylinux_2_28_x86_64'
+    wheel=ROOT/'dist'/f'rustydoctr-{VERSION}-cp312-abi3-{tag}.whl'
     if not wheel.exists():raise SystemExit('Build the Python wheel first.')
     with zipfile.ZipFile(wheel) as z:
         assert len(z.namelist())==len(set(z.namelist()))
         assert 'rustydoctr/__main__.py' in z.namelist()
-    out=staging/f'rustydoctr-{VERSION}-windows-x64';out.mkdir(parents=True,exist_ok=True)
+    out=staging/f'rustydoctr-{VERSION}-{platform}-x64';out.mkdir(parents=True,exist_ok=True)
     def copy(source,destination):
         target=out/destination;target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(ROOT/source,target)
     copy(wheel.relative_to(ROOT),wheel.name)
@@ -22,9 +23,12 @@ def build(staging):
     (out/'configs').mkdir(exist_ok=True)
     for profile in ['balanced','low-vram']:(out/'configs'/f'{profile}.json').write_text(json.dumps(module.default_config(profile),indent=2),encoding='utf-8')
     for name in ['stream_images.py','stream_pdf.py']:copy('examples/'+name,'examples/'+name)
-    copy('docs/guides/PYTHON_DEPLOYMENT.md','README.md');copy('docs/legal/THIRD_PARTY.md','THIRD_PARTY.md');copy('licenses/doctr-LICENSE','licenses/doctr-LICENSE')
-    copy('scripts/install_transfer.ps1','install.ps1');copy('scripts/verify_transfer.py','verify_bundle.py')
-    copy('pybaseline/requirements-deploy-lock.txt','runtime-lock.txt')
+    guide='PYTHON_DEPLOYMENT.md' if platform=='windows' else 'LINUX_DEPLOYMENT.md'
+    copy('docs/guides/'+guide,'README.md');copy('docs/legal/THIRD_PARTY.md','THIRD_PARTY.md');copy('licenses/doctr-LICENSE','licenses/doctr-LICENSE')
+    ext='ps1' if platform=='windows' else 'sh'
+    copy('scripts/install_transfer.'+ext,'install.'+ext);copy('scripts/verify_transfer.py','verify_bundle.py')
+    lock='requirements-deploy-lock.txt' if platform=='windows' else 'requirements-deploy-linux-lock.txt'
+    copy('pybaseline/'+lock,'runtime-lock.txt')
     copy('testdata/generated/a4_control.png','samples/document.png')
     readme='Generated local sample from the repository OCR fixtures. No public benchmark images or customer data are included.\n'
     (out/'samples/README.txt').write_text(readme,encoding='utf-8')
@@ -35,8 +39,11 @@ def build(staging):
     Path(archive+'.sha256').write_text(digest+'  '+Path(archive).name+'\n',encoding='ascii')
     print(archive,flush=True);print('SHA256',digest,flush=True)
 def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--platform',choices=['windows','linux'],default='windows')
+    args=parser.parse_args()
     dist=(ROOT/'dist').resolve();dist.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.package-',dir=dist) as temp:
         staging=Path(temp).resolve();staging.relative_to(dist)
-        build(staging)
+        build(staging,args.platform)
 if __name__=='__main__':main()

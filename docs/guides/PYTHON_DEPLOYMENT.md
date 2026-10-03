@@ -18,7 +18,8 @@ example dependencies from PyPI. Internet is required for that step. NVIDIA
 runtime dependencies are large (roughly 2 GB of downloads); they are not in the
 transfer ZIP. An NVIDIA driver must already be installed. If Windows reports a
 missing `VCRUNTIME`/`MSVCP` DLL, install Microsoft's Visual C++ 2015–2022 x64
-Redistributable. The wheel is Windows-only; Linux needs a separate build.
+Redistributable. This wheel is Windows-only; use the separate
+`rustydoctr-0.2.0-linux-x64.zip` bundle for Linux.
 
 Manual installation into your own existing environment:
 

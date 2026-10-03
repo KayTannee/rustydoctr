@@ -1,5 +1,7 @@
 # Use Rust OCR from Python
 
+For Linux NVIDIA systems, see [Linux installation and build instructions](LINUX_DEPLOYMENT.md).
+
 For another Windows NVIDIA machine, use the transfer ZIP and
 [deployment instructions](PYTHON_DEPLOYMENT.md). The wheel is version 0.2.0,
 CPython 3.12+ / Windows x64. Run VS Code **Python: build transfer ZIP** to rebuild
